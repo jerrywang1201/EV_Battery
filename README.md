@@ -10,7 +10,7 @@ This project implements a **self-supervised representation learning** pipeline f
 ## Setup
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -20,23 +20,23 @@ pip install -r requirements.txt
 You must provide the file name inside the Kaggle dataset (example: `EV_Battery.csv`).
 
 ```bash
-python -m src.download --out data/raw --file \"<dataset-file>.csv\"
+python3 -m src.download --out data/raw --file "cell_level_dataset.csv"
 ```
 
 ## 2) Inspect columns
 
 ```bash
-python -m src.inspect --data data/raw/dataset.csv
+python3 -m src.inspect --data data/raw/dataset.csv
 ```
 
 ## 3) Preprocess into windows
 
 ```bash
-python -m src.preprocess \
+python3 -m src.preprocess \
   --data data/raw/dataset.csv \
   --out data/processed \
   --features "Voltage,Current,Temperature" \
-  --label "SOH" \
+  --label "SoH" \
   --window 128 \
   --stride 16
 ```
@@ -44,7 +44,7 @@ python -m src.preprocess \
 ## 4) Self-supervised pretraining
 
 ```bash
-python -m src.ssl_pretrain \
+python3 -m src.ssl_pretrain \
   --data data/processed/train.npz \
   --out runs/ssl
 ```
@@ -52,7 +52,7 @@ python -m src.ssl_pretrain \
 ## 5) Downstream evaluation (few labels)
 
 ```bash
-python -m src.downstream \
+python3 -m src.downstream \
   --data data/processed/train.npz \
   --val data/processed/val.npz \
   --ckpt runs/ssl/encoder.pt \

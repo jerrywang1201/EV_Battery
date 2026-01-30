@@ -76,7 +76,7 @@ def main():
         hv = enc(torch.from_numpy(Xv).to(device))
         pv = reg(hv).cpu().numpy().squeeze()
     mae = mean_absolute_error(yv, pv)
-    rmse = mean_squared_error(yv, pv, squared=False)
+    rmse = np.sqrt(mean_squared_error(yv, pv))
     print(f"Val MAE: {mae:.4f}  RMSE: {rmse:.4f}")
 
 
