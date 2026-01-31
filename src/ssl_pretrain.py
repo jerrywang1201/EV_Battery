@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from .augment import augment_pair
 from .model import Encoder1D, ProjectionHead, NTXentLoss
+from .utils import set_seed
 
 
 class SSLDataset(Dataset):
@@ -30,9 +31,11 @@ def main():
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--crop", type=int, default=96)
     parser.add_argument("--proj", type=int, default=128)
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
+    set_seed(args.seed)
     data = np.load(args.data)
     X = data["X"].astype(np.float32)
 
