@@ -52,6 +52,20 @@ def split_indices_by_group(
     return train_idx, val_idx, test_idx
 
 
+def standardize_by_train(
+    X: np.ndarray,
+    train_idx: np.ndarray,
+    eps: float = 1e-6,
+):
+    x_train = X[train_idx].reshape(-1, X.shape[2]).astype(np.float64)
+    feat_mean = x_train.mean(axis=0).astype(np.float32)
+    feat_std = x_train.std(axis=0).astype(np.float32)
+    feat_std = np.clip(feat_std, eps, None)
+    X = X.astype(np.float64)
+    X = (X - feat_mean[None, None, :]) / feat_std[None, None, :]
+    return X.astype(np.float32), feat_mean, feat_std
+
+
 def build_splits(
     df: pd.DataFrame,
     features: list[str],
@@ -104,7 +118,13 @@ def build_splits(
         )
     else:
         train_idx, val_idx, test_idx = split_indices(len(X), val_frac, test_frac, seed)
-    return X, y, train_idx, val_idx, test_idx
+    X, feat_mean, feat_std = standardize_by_train(X, train_idx)
+    stats = {
+        "mean": feat_mean,
+        "std": feat_std,
+        "features": np.array(features),
+    }
+    return X, y, train_idx, val_idx, test_idx, stats
 
 
 def main():
@@ -138,7 +158,7 @@ def main():
     if label_col and label_col not in df.columns:
         raise SystemExit(f"Label column not found: {label_col}")
 
-    X, y, train_idx, val_idx, test_idx = build_splits(
+    X, y, train_idx, val_idx, test_idx, stats = build_splits(
         df=df,
         features=features,
         label_col=label_col,
@@ -162,6 +182,9 @@ def main():
     save_split("train", train_idx)
     save_split("val", val_idx)
     save_split("test", test_idx)
+    stats_path = os.path.join(args.out, "stats.npz")
+    np.savez_compressed(stats_path, mean=stats["mean"], std=stats["std"], features=stats["features"])
+    print(f"Saved stats: {stats_path}")
 
 
 if __name__ == "__main__":

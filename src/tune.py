@@ -67,7 +67,7 @@ def main():
         trial_seed = args.seed + trial_id
         set_seed(trial_seed)
 
-        X, y, train_idx, val_idx, _ = build_splits(
+        X, y, train_idx, val_idx, _, _ = build_splits(
             df=df,
             features=features,
             label_col=label_col,
