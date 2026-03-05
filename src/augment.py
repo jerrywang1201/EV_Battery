@@ -6,7 +6,8 @@ def jitter(x: np.ndarray, sigma: float = 0.01) -> np.ndarray:
 
 
 def scaling(x: np.ndarray, sigma: float = 0.1) -> np.ndarray:
-    factor = np.random.normal(1.0, sigma, size=(x.shape[0], 1)).astype(x.dtype)
+    # Channel-wise global scaling preserves temporal dynamics.
+    factor = np.random.normal(1.0, sigma, size=(1, x.shape[1])).astype(x.dtype)
     return x * factor
 
 
