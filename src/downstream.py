@@ -118,7 +118,10 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     enc = Encoder1D(in_ch=X.shape[2], out_dim=128).to(device)
-    enc.load_state_dict(torch.load(args.ckpt, map_location=device))
+    state = torch.load(args.ckpt, map_location=device)
+    missing, unexpected = enc.load_state_dict(state, strict=False)
+    if missing or unexpected:
+        print(f"Checkpoint compatibility notice: missing={missing}, unexpected={unexpected}")
     enc.eval()
 
     best, best_pred = train_regressor(

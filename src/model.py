@@ -17,12 +17,15 @@ class Encoder1D(nn.Module):
             nn.BatchNorm1d(out_dim),
             nn.ReLU(),
         )
+        # Attention pooling keeps the model focused on informative timesteps.
+        self.attn = nn.Conv1d(out_dim, 1, kernel_size=1)
 
     def forward(self, x):
         # x: [B, T, C]
         x = x.transpose(1, 2)  # [B, C, T]
         h = self.net(x)
-        h = h.mean(dim=-1)
+        w = torch.softmax(self.attn(h), dim=-1)  # [B, 1, T]
+        h = (h * w).sum(dim=-1)
         return h
 
 
