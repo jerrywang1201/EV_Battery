@@ -1,4 +1,5 @@
 import argparse
+import copy
 import csv
 import json
 import os
@@ -22,6 +23,37 @@ class LabeledDataset(Dataset):
         return torch.from_numpy(self.X[idx]), torch.tensor(self.y[idx]).float()
 
 
+class RegressorMLP(torch.nn.Module):
+    def __init__(self, in_dim: int = 128, hidden_dim: int = 64, dropout: float = 0.1):
+        super().__init__()
+        self.net = torch.nn.Sequential(
+            torch.nn.Linear(in_dim, hidden_dim),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(dropout),
+            torch.nn.Linear(hidden_dim, 1),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+def set_finetune_mode(enc: torch.nn.Module, mode: str) -> None:
+    for p in enc.parameters():
+        p.requires_grad = False
+    if mode == "none":
+        return
+    if mode == "all":
+        for p in enc.parameters():
+            p.requires_grad = True
+        return
+    if mode == "last":
+        for name, p in enc.named_parameters():
+            if name.startswith("net.6") or name.startswith("net.7") or name.startswith("attn"):
+                p.requires_grad = True
+        return
+    raise ValueError(f"Unsupported finetune mode: {mode}")
+
+
 def train_regressor(
     enc,
     X: np.ndarray,
@@ -35,6 +67,9 @@ def train_regressor(
     seed: int,
     out_dir: str | None,
     save_best: bool,
+    head_hidden: int = 64,
+    dropout: float = 0.1,
+    finetune: str = "last",
 ):
     n = len(X)
     m = max(1, int(n * label_frac))
@@ -44,8 +79,10 @@ def train_regressor(
     y = y[idx]
 
     device = next(enc.parameters()).device
-    reg = torch.nn.Linear(128, 1).to(device)
-    opt = torch.optim.Adam(reg.parameters(), lr=lr)
+    set_finetune_mode(enc, finetune)
+    reg = RegressorMLP(in_dim=128, hidden_dim=head_hidden, dropout=dropout).to(device)
+    trainable = list(reg.parameters()) + [p for p in enc.parameters() if p.requires_grad]
+    opt = torch.optim.Adam(trainable, lr=lr)
     loss_fn = torch.nn.MSELoss()
 
     dl = DataLoader(LabeledDataset(X, y), batch_size=batch, shuffle=True)
@@ -56,11 +93,15 @@ def train_regressor(
 
     for epoch in range(epochs):
         reg.train()
+        enc.eval()  # Keep BN running stats stable for few-label fine-tuning.
         total = 0.0
         for xb, yb in dl:
             xb = xb.to(device)
             yb = yb.to(device).view(-1, 1)
-            with torch.no_grad():
+            if finetune == "none":
+                with torch.no_grad():
+                    h = enc(xb)
+            else:
                 h = enc(xb)
             pred = reg(h)
             loss = loss_fn(pred, yb)
@@ -79,12 +120,17 @@ def train_regressor(
         rmse = np.sqrt(mean_squared_error(yv, pv))
         if rmse < best["rmse"]:
             best = {"rmse": float(rmse), "mae": float(mae), "epoch": epoch + 1}
-            best_state = reg.state_dict()
+            best_state = {
+                "reg": copy.deepcopy(reg.state_dict()),
+                "enc": copy.deepcopy(enc.state_dict()) if finetune != "none" else None,
+            }
             best_pred = pv
 
     if out_dir and save_best and best_state is not None:
         os.makedirs(out_dir, exist_ok=True)
-        torch.save(best_state, os.path.join(out_dir, "best_reg.pt"))
+        torch.save(best_state["reg"], os.path.join(out_dir, "best_reg.pt"))
+        if best_state["enc"] is not None:
+            torch.save(best_state["enc"], os.path.join(out_dir, "best_encoder.pt"))
         with open(os.path.join(out_dir, "metrics.json"), "w") as f:
             json.dump(best, f, indent=2)
 
@@ -100,6 +146,9 @@ def main():
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--head_hidden", type=int, default=64)
+    parser.add_argument("--dropout", type=float, default=0.1)
+    parser.add_argument("--finetune", choices=["none", "last", "all"], default="last")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out", default="runs/downstream")
     parser.add_argument("--save_best", action="store_true")
@@ -137,6 +186,9 @@ def main():
         seed=args.seed,
         out_dir=args.out,
         save_best=args.save_best,
+        head_hidden=args.head_hidden,
+        dropout=args.dropout,
+        finetune=args.finetune,
     )
     print(f"Best Val MAE: {best['mae']:.4f}  RMSE: {best['rmse']:.4f} @ epoch {best['epoch']}")
 

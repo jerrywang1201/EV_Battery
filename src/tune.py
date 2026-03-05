@@ -30,6 +30,9 @@ def main():
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--head_hidden", type=int, default=64)
+    parser.add_argument("--dropout", type=float, default=0.1)
+    parser.add_argument("--finetune", choices=["none", "last", "all"], default="last")
     parser.add_argument("--val_frac", type=float, default=0.1)
     parser.add_argument("--test_frac", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
@@ -102,6 +105,9 @@ def main():
             seed=trial_seed,
             out_dir=out_dir,
             save_best=True,
+            head_hidden=args.head_hidden,
+            dropout=args.dropout,
+            finetune=args.finetune,
         )
 
         results.append(
